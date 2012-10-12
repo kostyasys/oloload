@@ -7,13 +7,33 @@ require 'goliath'
 require 'goliath/rack/templates'
 require 'haml'
 require "tilt"
-
-require "parser"
+require "json"
 
 class Stream < Goliath::API
+  EOL = "\r\n"
+  MULTIPART_BOUNDARY = "AaB03x"
+  MULTIPART = %r|\Amultipart/.*boundary=\"?([^\";,]+)\"?|n
+  TOKEN = /[^\s()<>,;:\\"\/\[\]?=]+/
+  CONDISP = /Content-Disposition:\s*#{TOKEN}\s*/i
+  DISPPARM = /;\s*(#{TOKEN})=("(?:\\"|[^"])*"|#{TOKEN})*/
+  RFC2183 = /^#{CONDISP}(#{DISPPARM})+$/i
+  BROKEN_QUOTED = /^#{CONDISP}.*;\sfilename="(.*?)"(?:\s*$|\s*;\s*#{TOKEN}=)/i
+  BROKEN_UNQUOTED = /^#{CONDISP}.*;\sfilename=(#{TOKEN})/i
+  MULTIPART_CONTENT_TYPE = /Content-Type: (.*)#{EOL}/ni
+  MULTIPART_CONTENT_DISPOSITION = /Content-Disposition:.*\s+name="?([^\";]*)"?/ni
+  MULTIPART_CONTENT_ID = /Content-ID:\s*([^#{EOL}]*)/ni
+
+  include Goliath::Rack::Templates
+  use Goliath::Rack::Heartbeat
+  use Goliath::Rack::Params
+
+  use(Rack::Static,
+        :root => Goliath::Application.app_path("public"),
+        :urls => ["/favicon.ico", '/css', '/js', '/img'])
 
   def initialize
-    @parsers = {}
+    @uploads = {}
+    @connections = {}
   end
 
   def downloader_connected?
@@ -38,7 +58,6 @@ class Stream < Goliath::API
     'closed'
   end
 
-  include Goliath::Rack::Templates
 
   def on_headers(env, headers)
     if env['REQUEST_METHOD'] == 'POST'
@@ -59,9 +78,19 @@ class Stream < Goliath::API
     #env[:request_id] ||= get_request_id
     #_id = env[:request_id]
     unless env[:boundary_end]
+      unless env['QUERY_STRING'] =~ /transfer_id=([0-9]+)/
+        raise Goliath::Validation::VerificationError.new('no file given')
+      end
+      env[:transfer_id] = $1.to_i
+      upload = @uploads[env[:transfer_id]]
+      upload['status'] = 'uploading'
+
+
+
       unless env['CONTENT_TYPE'] =~ MULTIPART
         raise Goliath::Validation::VerificationError.new('no file given')
       end
+
       boundary = $1
       boundary_start = "--#{boundary}"
       boundary_end = /(?:#{EOL})?#{Regexp.quote(boundary)}(#{EOL}|--)/n
@@ -80,23 +109,15 @@ class Stream < Goliath::API
       data.slice!(boundary_end, data.size)
     end
 
-    #unless @parsers[_id]
-    #
-    #  parser = Parser.new
-    #  @parsers[_id] = parser
-    #  env.logger.info 'uploading'
-    #  env.logger.info 'block size: ' + data.length.to_s
-    #  parser.on :part_data do |buf, from, to|
-    write_download_stream(data)
-      #end
-    #end
-    #
-
+    @connections[env[:transfer_id]].stream_send(data)
   end
 
   def on_close(env)
-    env.logger.info env[:uploading]
-    close_download_stream if env[:uploading]
+    if env[:transfer_id]
+      env.logger.info 'closing: ' + env[:transfer_id]
+      @uploads[env[:transfer_id]]['status'] = 'finished';
+      @connections[env[:transfer_id]].stream_close
+    end
   end
 
 
@@ -104,13 +125,47 @@ class Stream < Goliath::API
     case env['PATH_INFO']
       when '/'
         then [200, {}, haml(:index)]
-      when '/download'
-        then
-            add_download_stream(env)
-            [200, {}, Goliath::Response::STREAMING]
+      when '/register_upload' then
+        if params['filename']
+          upload_id = get_request_id
+          upload_data = {
+              filename: params['filename'].split('/').last,
+              upload_id: upload_id,
+              download_link: "http://#{env['HTTP_HOST']}/invite?transfer_id=#{upload_id}"
+          }
+          @uploads[upload_id] = upload_data
+          json_response(upload_data)
+        else
+          json_response()
+        end
+
+      when '/upload_status' then
+        unless params['transfer_id'] || @uploads.has_key?(params['transfer_id'])
+          json_response()
+        end
+
+        upload = @uploads[params['transfer_id'].to_i]
+        json_response upload
+
+      when '/invite' then
+          return [404, {}, '404'] unless params['transfer_id'] || @uploads.has_key?(params['transfer_id'])
+
+          upload = @uploads[params['transfer_id'].to_i]
+          upload['status'] = 'client.connected'
+
+          @connections[upload['upload_id']] = env
+
+          [200, {'Content-Disposition' => "attachment; filename=#{upload['filename']}"}, Goliath::Response::STREAMING]
+          break;
       else
         [200, {'Content-type' => 'text/plain'}, env['async-headers']]
     end
+  end
+
+
+
+  def json_response(data={})
+    [200, {'Content-type' => 'application/json'}, data.to_json]
   end
 
   def get_request_id

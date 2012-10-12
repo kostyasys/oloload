@@ -1,7 +1,38 @@
-.div{style: "float: left; width: 40%; border: 1px solid #dadada; height: 410px; overflow: auto"}
-  %form{method: 'post', action: "/upload", enctype: "multipart/form-data", target: "frame"}
-    %input{type: "file", name: 'file'}
-    %input{type: "submit", value: 'upload'}
-.div{style: "float: left; width: 40%; border: 1px solid #dadada; height: 410px; overflow: auto"}
-  %iframe{src: '/download', style: "width: 99%; height: 200px"}
-  %iframe{ style: "width: 99%; height: 200px", id: 'frame'}
+!!!
+%html
+  %head
+    %title olO_loAd
+    %link{rel: 'stylesheet', href: '/css/bootstrap.min.css'}
+    %link{rel: 'stylesheet', href: '/css/bootstrap-responsive.min.css'}
+
+  %body
+    .navbar.navbar-fixed-top.navbar-inverse
+      .navbar-inner
+        .container
+          %a.brand{href: '/'} olO_Load
+
+    .hero-unit
+      %h1 передача файлов бесплатно онлайн
+      -#%ol
+      -#  %li Выбери файл
+      -#  %li Передай ссылку
+    .container{style: 'margin-top: 80px'}
+
+      %form{method: 'post', action: "/upload", enctype: "multipart/form-data", target: "frame", class: 'upload'}
+        %input{type: "hidden", name: 'transfer_id', id: 'transfer_id'}
+        %input{type: "file", name: 'file', class: 'fileinput'}
+        %input{type: "submit", value: 'Create transfer', class: 'btn btn-primary'}
+
+      .share
+
+      .wait
+        %h3 Waiting for client to start download
+        %h3 Transfering data
+        .progress
+          .bar
+
+      %iframe{style: 'width: 1000px; height:300px;', id: 'frame'}
+
+    %script{src: 'http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js'}
+    %script{src: '/js/bootstrap.min.js'}
+    %script{src: '/js/app.js'}
