@@ -11,11 +11,12 @@ $(document).ready(function(){
 
         $.ajax({
             url: '/register_upload',
-            data: {filename: $('.fileinput').val()},
+            data: {filename: $('.file_input').val()},
             dataType: 'json',
             success: function(response)
             {
                 $('.share').html(response.download_link)
+                $('.share').attr('href', response.download_link)
                 upload_data = response;
 
                 var interval = setInterval(function(){

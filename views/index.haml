@@ -20,10 +20,10 @@
 
       %form{method: 'post', action: "/upload", enctype: "multipart/form-data", target: "frame", class: 'upload'}
         %input{type: "hidden", name: 'transfer_id', id: 'transfer_id'}
-        %input{type: "file", name: 'file', class: 'fileinput'}
+        %input{type: "file", name: 'file', class: 'file_input'}
         %input{type: "submit", value: 'Create transfer', class: 'btn btn-primary'}
 
-      .share
+      %a.share{href: '#'}
 
       .wait
         %h3 Waiting for client to start download
