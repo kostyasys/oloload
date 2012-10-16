@@ -2,6 +2,15 @@ $(document).ready(function(){
     var upload_ready = false;
     var upload_data;
     var form_sent = false;
+
+    ZeroClipboard.setMoviePath( '/js/ZeroClipboard.swf' );
+    var clip = new ZeroClipboard.Client();
+    clip.addEventListener( 'onComplete', my_complete );
+
+    function my_complete( client, text ) {
+        alert("Скопировано: \r\n" + text );
+    }
+
     $('.file_input').change(function(){
        if(this.value)
        {
@@ -23,7 +32,9 @@ $(document).ready(function(){
             success: function(response)
             {
                 $('.share').show();
-                $('.share a').html(response.download_link).show();
+                clip.setText(response.download_link);
+                clip.glue( 'copy' );
+                $('.share input').val(response.download_link);
                 $('.share a').attr('href', response.download_link);
                 upload_data = response;
 

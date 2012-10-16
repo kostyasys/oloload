@@ -26,7 +26,8 @@
 
         %li.share{style: 'display: none;'}
           %h3 Отправь ссылку получателю
-          %a{href: '#', target: '_blank'}
+          %input{type: 'text', readonly: 'readonly', style: 'width: 90%; display: block'}
+          %a.copy{href:'#', id: 'copy'} Скопировать
 
       .wait{style: "display: none"}
         %h3 Transfering data
@@ -37,4 +38,5 @@
 
     %script{src: '/js/jquery.min.js'}
     %script{src: '/js/bootstrap.min.js'}
+    %script{src: '/js/ZeroClipboard.js'}
     %script{src: '/js/app.js'}
