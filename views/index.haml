@@ -17,22 +17,24 @@
       -#  %li Выбери файл
       -#  %li Передай ссылку
     .container{style: 'margin-top: 80px'}
+      %ol
+        %li
+          %h3 Выбери файл
+          %form{method: 'post', action: "/upload", enctype: "multipart/form-data", target: "frame", class: 'upload form form-'}
+            %input{type: "file", name: 'file', class: 'file_input'}
+            -#%input{type: "submit", value: 'Create transfer', class: 'btn btn-primary'}
 
-      %form{method: 'post', action: "/upload", enctype: "multipart/form-data", target: "frame", class: 'upload'}
-        %input{type: "hidden", name: 'transfer_id', id: 'transfer_id'}
-        %input{type: "file", name: 'file', class: 'file_input'}
-        %input{type: "submit", value: 'Create transfer', class: 'btn btn-primary'}
+        %li.share{style: 'display: none;'}
+          %h3 Отправь ссылку получателю
+          %a{href: '#', target: '_blank'}
 
-      %a.share{href: '#'}
-
-      .wait
-        %h3 Waiting for client to start download
+      .wait{style: "display: none"}
         %h3 Transfering data
         .progress
           .bar
 
-      %iframe{style: 'width: 1000px; height:300px;', id: 'frame'}
+      %iframe{style: 'width:0px; height:0px;', id: 'frame'}
 
-    %script{src: 'http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js'}
+    %script{src: '/js/jquery.min.js'}
     %script{src: '/js/bootstrap.min.js'}
     %script{src: '/js/app.js'}

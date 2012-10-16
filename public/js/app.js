@@ -2,6 +2,13 @@ $(document).ready(function(){
     var upload_ready = false;
     var upload_data;
     var form_sent = false;
+    $('.file_input').change(function(){
+       if(this.value)
+       {
+           $('form.upload').trigger('submit');
+       }
+    });
+
     $('form.upload').submit(function()
     {
         if (upload_ready)
@@ -15,8 +22,9 @@ $(document).ready(function(){
             dataType: 'json',
             success: function(response)
             {
-                $('.share').html(response.download_link)
-                $('.share').attr('href', response.download_link)
+                $('.share').show();
+                $('.share a').html(response.download_link).show();
+                $('.share a').attr('href', response.download_link);
                 upload_data = response;
 
                 var interval = setInterval(function(){
@@ -31,6 +39,8 @@ $(document).ready(function(){
                                 case "client.connected":
                                     if (!form_sent)
                                     {
+//                                        $('.share').hide();
+                                        $('.wait').show();
                                         upload_ready = true;
                                         $('form.upload')[0].action = "/upload/?transfer_id=" + r.upload_id;
 
@@ -42,7 +52,12 @@ $(document).ready(function(){
                                     $('.progress .bar').css('width', Math.ceil(100 * r.bytes_uploaded/ r.bytes_total) + '%');
                                     break;
                                 case 'finished':
+                                    $('.progress .bar').css('width', '100%');
                                     clearInterval(interval);
+
+                                    upload_data = null;
+                                    form_sent = false;
+                                    upload_ready = false;
                                     break;
                             }
                         }

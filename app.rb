@@ -40,7 +40,6 @@ class Stream < Goliath::API
   def on_headers(env, headers)
     if env['REQUEST_METHOD'] == 'POST'
       env[:uploading] = true
-      env.logger.info 'Upload size: ' + headers['Content-Length'].to_s
 
       #raise Goliath::Validation::NotImplementedError.new("no downloader yet") unless downloader_connected?
     end
@@ -48,24 +47,23 @@ class Stream < Goliath::API
     if env['PATH_INFO'] == '/download'
       env[:download_stream] = true
     end
-
+    env.logger.info headers
     env['async-headers'] = headers
   end
 
   def on_body(env, data)
-    #env[:request_id] ||= get_request_id
-    #_id = env[:request_id]
     env['rack.input'] = nil
     unless env[:boundary_end]
       unless env['QUERY_STRING'] =~ /transfer_id=([0-9]+)/
         raise Goliath::Validation::VerificationError.new('no file given')
       end
       env[:transfer_id] = $1.to_i
-      env.logger.info 'transfer to ' + env[:transfer_id].to_s
+
 
       upload = @uploads[env[:transfer_id]]
       upload['status'] = 'uploading'
-
+      upload['bytes_total'] = env['async-headers']['Content-Length']
+      upload['bytes_uploaded'] ||= 0
 
 
       unless env['CONTENT_TYPE'] =~ MULTIPART
@@ -74,32 +72,44 @@ class Stream < Goliath::API
 
       boundary = $1
       boundary_start = "--#{boundary}"
-      boundary_end = /(?:#{EOL})?(--)#{Regexp.quote(boundary)}(--)/n
+      boundary_end = /#{EOL}--#{Regexp.quote(boundary)}--/n
 
       head_end = data.index(EOL+EOL)
-      head = data.slice(0, head_end + 4)
+
+      env.logger.info 'Upload size: ' + head_end.to_s
+      head = data.slice!(0, head_end + 4)
       env.logger.info head
 
       env[:boundary_end] = boundary_end
-
-      data.slice!(0, head_end+4)
     end
 
     if match_data = data.match(env[:boundary_end])
-      old_data = data.dup
+
       boundary_end = data.index(match_data[0])
       data.slice!(boundary_end, data.size)
 
       @uploads[env[:transfer_id]]['status'] = 'finished'
+
+      @uploads[env[:transfer_id]]['bytes_uploaded'] += data.length
       @connections[env[:transfer_id]].stream_send(data)
 
+      transfer_id = env[:transfer_id]
+
+      # closing downloader connection and cleaning up transfer data
       EM.add_timer(1) do
-        @connections[env[:transfer_id]].stream_close
+        @connections[transfer_id].stream_close
+        @connections.delete(transfer_id)
+        # Upload status data will be available next 30 seconds
+        # assuming client will have enough time to sync
+        EM.add_timer(30) do
+          @uploads.delete(transfer_id)
+        end
       end
 
       return
     end
 
+    @uploads[env[:transfer_id]]['bytes_uploaded'] += data.length
     @connections[env[:transfer_id]].stream_send(data)
   end
 
@@ -113,7 +123,8 @@ class Stream < Goliath::API
 
 
   def response(env)
-    case env['PATH_INFO'].split('/')[1]
+    path_params = env['PATH_INFO'].split('/')
+    case path_params[1]
       when nil
         then [200, {}, haml(:index)]
       when 'register_upload' then
@@ -122,7 +133,7 @@ class Stream < Goliath::API
           upload_data = {
               filename: params['filename'].split('\\').last,
               upload_id: upload_id,
-              download_link: "http://#{env['HTTP_HOST']}/invite/#{params['filename'].split('\\').last}?transfer_id=#{upload_id}"
+              download_link: "http://#{env['HTTP_HOST']}/invite/#{upload_id}/#{params['filename'].split('\\').last}"
           }
           @uploads[upload_id] = upload_data
           json_response(upload_data)
@@ -139,14 +150,15 @@ class Stream < Goliath::API
         json_response upload
 
       when 'invite' then
-          return [404, {}, '404'] unless params['transfer_id'] || @uploads.has_key?(params['transfer_id'])
+        transfer_id = path_params[2].to_i
+        return [404, {}, '404'] unless @uploads.has_key?(transfer_id)
 
-          upload = @uploads[params['transfer_id'].to_i]
-          upload['status'] = 'client.connected'
+        upload = @uploads[transfer_id]
+        upload['status'] = 'client.connected'
 
-          @connections[params['transfer_id'].to_i] = env
+        @connections[transfer_id] = env
 
-          [200, {'Content-disposition' => "attachment; filename='#{upload['filename']}'"}, Goliath::Response::STREAMING]
+        [200, {'Content-disposition' => "attachment"}, Goliath::Response::STREAMING]
       else
         [200, {'Content-type' => 'text/plain'}, env['async-headers']]
     end
@@ -167,7 +179,7 @@ class Stream < Goliath::API
 end
 
 
-runner = Goliath::Runner.new(ARGV, nil)
-runner.api = Stream.new
-runner.app = Goliath::Rack::Builder.build(Stream, runner.api)
-runner.run
+#runner = Goliath::Runner.new(ARGV, nil)
+#runner.api = Stream.new
+#runner.app = Goliath::Rack::Builder.build(Stream, runner.api)
+#runner.run
